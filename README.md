@@ -2,7 +2,7 @@
 
 ### Introduction
 
-synchronize calico routes
+Nodes outside the k8s cluster synchronize calico routing information to directly access pods
 
 ![img.png](img.png)
 
