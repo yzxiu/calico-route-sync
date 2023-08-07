@@ -1,0 +1,8 @@
+/bin
+/k8s-net-calico.drawio
+
+/build.sh
+/deploy.yml
+/deploy.yml.bak
+/Dockerfile
+/calico-route-sync-deploy.yml
