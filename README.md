@@ -8,16 +8,18 @@ Nodes outside the k8s cluster synchronize calico routing information to directly
 
 ### Usage
 
-bin：
-
 ```bash
 sudo ./calico-route-sync --kubeconfig=/home/root/.kube/config
 ```
 
-docker:
+or, use docker to start
 
 ```bash
-docker run --rm -it --network=host --cap-add NET_ADMIN -v ~/.kube/config:/root/config q946666800/calico-route-sync:0.1 --kubeconfig=/root/config
+docker run --rm -it --name calico-route-sync \
+ --network=host --cap-add NET_ADMIN \
+ -v ~/.kube/config:/root/config \
+ q946666800/calico-route-sync:0.1 \
+ --kubeconfig=/root/config
 ```
 
 ### Notice
