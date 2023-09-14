@@ -3,13 +3,14 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"github.com/yzxiu/calico-route-sync/pkg/calico"
 	"github.com/yzxiu/calico-route-sync/pkg/controllers"
 	"github.com/yzxiu/calico-route-sync/pkg/route"
 	"github.com/yzxiu/calico-route-sync/pkg/util"
-	"k8s.io/client-go/informers"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/cache"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/dynamic/dynamicinformer"
 	"os"
 	"time"
 
@@ -21,8 +22,18 @@ import (
 )
 
 var (
-	scheme   = runtime.NewScheme()
-	setupLog = ctrl.Log.WithName("setup")
+	scheme         = runtime.NewScheme()
+	setupLog       = ctrl.Log.WithName("setup")
+	IpPoolResource = schema.GroupVersionResource{
+		Group:    "crd.projectcalico.org",
+		Version:  "v1",
+		Resource: "ippools",
+	}
+	NodeResource = schema.GroupVersionResource{
+		Group:    "",
+		Version:  "v1",
+		Resource: "nodes",
+	}
 )
 
 func init() {
@@ -53,16 +64,20 @@ func main() {
 		os.Exit(1)
 	}
 
-	// NodeLister
-	client, err := kubernetes.NewForConfig(mgr.GetConfig())
+	// Lister
+	dynamicClient, err := dynamic.NewForConfig(mgr.GetConfig())
 	if err != nil {
 		panic(err.Error())
 	}
-	factory := informers.NewSharedInformerFactory(client, 5*time.Minute)
-	nodeInformer := factory.Core().V1().Nodes()
-	go factory.Start(stopCh)
-	// Waiting for caches to sync for node
-	cache.WaitForNamedCacheSync("node", stopCh, nodeInformer.Informer().HasSynced)
+	dynamicFactory := dynamicinformer.NewDynamicSharedInformerFactory(dynamicClient, 5*time.Minute)
+	ippoolInformer := dynamicFactory.ForResource(IpPoolResource)
+	nodeInformer := dynamicFactory.ForResource(NodeResource)
+	dynamicFactory.Start(stopCh)
+	for gvr, ok := range dynamicFactory.WaitForCacheSync(stopCh) {
+		if !ok {
+			panic(fmt.Sprintf("Failed to sync cache for resource %v", gvr))
+		}
+	}
 
 	// localNetwork
 	localNetworks, err := util.LocalNetworks()
@@ -73,11 +88,12 @@ func main() {
 	router, err := route.NewRouter(localNetworks)
 
 	r := &controllers.BlockAffinityReconciler{
-		Client:     mgr.GetClient(),
-		Log:        ctrl.Log.WithName("controllers").WithName("BlockAffinity"),
-		Scheme:     mgr.GetScheme(),
-		NodeLister: nodeInformer.Lister(),
-		Router:     router,
+		Client:       mgr.GetClient(),
+		Log:          ctrl.Log.WithName("controllers").WithName("BlockAffinity"),
+		Scheme:       mgr.GetScheme(),
+		NodeLister:   nodeInformer.Lister(),
+		IpPoolLister: ippoolInformer.Lister(),
+		Router:       router,
 	}
 	if err = r.SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "blockaffinity")
@@ -88,14 +104,7 @@ func main() {
 	go func() {
 		<-stopCh
 		setupLog.Info("clean pod route ...")
-		list := calico.NewBlockAffinityList()
-		err = r.List(ctx, list)
-		for _, af := range list.Items {
-			er := route.CleanupLeftovers(af.Spec.CIDR)
-			if !er {
-				setupLog.Info("del route", "route", af.Spec.CIDR)
-			}
-		}
+		r.CleanCalicoRoutes()
 		setupLog.Info("clean pod route finished ...")
 		cancel()
 	}()

@@ -1,7 +1,7 @@
 
 build:
 	rm -rf bin/*
-	go build -o bin/calico-route-sync-linux cmd/sync/main.go
+	go build -ldflags="-w -s" -o bin/calico-route-sync-linux cmd/sync/main.go
 
 docker-build:
 	docker build -t

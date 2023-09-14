@@ -1,11 +1,13 @@
 package route
 
 import (
+	"github.com/vishvananda/netlink"
 	"github.com/yzxiu/calico-route-sync/pkg/types"
 	"net"
 )
 
 type NetLinkHandle interface {
+	CalicoRoutes(nets []net.IPNet) []netlink.Route
 	// RouteExist Determine whether the route exists
 	RouteExist(localNetworks []types.LocalNetwork, route *types.Route) bool
 	// RouteConflict When dst is the same, but gw or linkName is different, we consider routing conflict

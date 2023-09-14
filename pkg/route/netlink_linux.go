@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/vishvananda/netlink"
 	"github.com/yzxiu/calico-route-sync/pkg/types"
+	"github.com/yzxiu/calico-route-sync/pkg/util"
 	"k8s.io/klog/v2"
 	"net"
 )
@@ -15,6 +16,23 @@ type netlinkHandle struct {
 
 func NewNetLinkHandle() NetLinkHandle {
 	return &netlinkHandle{netlink.Handle{}}
+}
+
+func (n netlinkHandle) CalicoRoutes(pools []net.IPNet) []netlink.Route {
+	routes, err := n.RouteList(nil, netlink.FAMILY_V4)
+	var calicoRoutes []netlink.Route
+	if err != nil {
+		klog.Error("get routes err: %v", err)
+		return nil
+	}
+	for _, r := range routes {
+		for _, pool := range pools {
+			if r.Dst != nil && util.ContainsCIDR(&pool, r.Dst) {
+				calicoRoutes = append(calicoRoutes, r)
+			}
+		}
+	}
+	return calicoRoutes
 }
 
 func (n netlinkHandle) RouteCheckAndDel(localNetworks []types.LocalNetwork, route *types.Route) error {
@@ -76,9 +94,15 @@ func gwContains(localNetworks []types.LocalNetwork, dr *types.Route) bool {
 }
 
 func (n netlinkHandle) RouteDel(route *types.Route) error {
-	return n.Handle.RouteDel(&netlink.Route{
+	err := n.Handle.RouteDel(&netlink.Route{
 		Dst: route.DstNet,
 	})
+	if err != nil {
+		klog.Error("del route err: %v", err)
+	} else {
+		klog.Infof("del route: %+v", route.DstNet)
+	}
+	return err
 }
 
 func (n netlinkHandle) RouteDelNet(net *net.IPNet) error {
