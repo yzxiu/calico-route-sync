@@ -20,7 +20,7 @@ docker:
 docker run --rm -it --name calico-route-sync \
  --network=host --cap-add NET_ADMIN \
  -v ~/.kube/config:/root/config \
- q946666800/calico-route-sync:0.1 \
+ q946666800/calico-route-sync:0.2 \
  --kubeconfig=/root/config
 ```
 
