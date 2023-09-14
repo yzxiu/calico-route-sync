@@ -2,7 +2,9 @@
 
 ### Introduction
 
-Nodes outside the k8s cluster synchronize calico routing information to directly access pods
+Nodes outside the k8s cluster synchronize calico routing information to directly access pods.
+
+This project only uses the listwatch method of node/blockaffinit/ippool resources and will not change any resources of the k8s cluster.
 
 ![img.png](img.png)
 
